@@ -12,10 +12,7 @@ import de.monticore.generating.templateengine.reporting.commons.*;
 import de.monticore.visitor.ITraverser;
 
 import java.io.File;
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  */
@@ -48,8 +45,6 @@ public class SummaryReporter extends AReporter {
   public static final String MAX_AST_DEPTH = "max AST depth";
   
   public static final String NUM_USED_TEMPLATES = "used standard templates";
-  
-  public static final String NUM_UNUSED_TEMPLATES = "unused standard templates";
   
   public static final String NUM_USED_HWTEMPLATES = "used handwritten templates";
   
@@ -359,8 +354,6 @@ public class SummaryReporter extends AReporter {
     int numCalledUnsetHookpoints = calledUnsetHookpoints.size();
     int numUsedTemplates = usedTemplates.size();
     int numUsedHWTemplates = usedHWTemplates.size();
-    int numUnusedTemplates = repository.getAllTemplateNames().size() -
-        numUsedTemplates;
     int numUnusedHWTemplates = repository.getAllHWTemplateNames().size() -
         numUsedHWTemplates;
     int numVariables = variableNames.size();
@@ -374,7 +367,6 @@ public class SummaryReporter extends AReporter {
     writeSummaryLine(NUM_TEMPLATE_INCLUDE, numTemplateIncludes);
     writeSummaryLine(NUM_TEMPLATE_WRITE, numTemplateWrites);
     writeSummaryLine(NUM_USED_TEMPLATES, numUsedTemplates);
-    writeSummaryLine(NUM_UNUSED_TEMPLATES, numUnusedTemplates);
     writeSummaryLine(NUM_USED_HWTEMPLATES, numUsedHWTemplates);
     writeSummaryLine(NUM_UNUSED_HWTEMPLATES, numUnusedHWTemplates);
     writeSummaryLine(MAX_TEMPLATE_DEPTH, maxTemplateDepth);
@@ -448,7 +440,6 @@ public class SummaryReporter extends AReporter {
     writeLine(" -" + NUM_TEMPLATE_INCLUDE + ": " + "Number of templates being included");
     writeLine(" -" + NUM_TEMPLATE_WRITE + ": " + "Number of templates being used");
     writeLine(" -" + NUM_USED_TEMPLATES + ": " + "Number of templates being used");
-    writeLine(" -" + NUM_UNUSED_TEMPLATES + ": " + "Number of templates being unused");
     writeLine(" -" + NUM_USED_HWTEMPLATES + ": " + "Number of handwritten templates being used");
     writeLine(" -" + NUM_UNUSED_HWTEMPLATES + ": " + "Number of handwritten templates being unused");
     writeLine(" -" + MAX_TEMPLATE_DEPTH + ": " + "Maximal depth of the template call hierarchy");
@@ -525,10 +516,10 @@ public class SummaryReporter extends AReporter {
   
   /**
    * @see de.monticore.generating.templateengine.reporting.commons.DefaultReportEventHandler#reportSetBeforeTemplate(java.lang.String,
-   * java.util.List)
+   * Optional, java.util.List)
    */
   @Override
-  public void reportSetBeforeTemplate(String template, List<? extends HookPoint> beforeHps) {
+  public void reportSetBeforeTemplate(String template, Optional<ASTNode> ast, List<? extends HookPoint> beforeHps) {
     for (HookPoint hp : beforeHps) {
       if (hp != null && hp instanceof CodeHookPoint) {
         numSetCodeHookpoints++;
@@ -544,10 +535,10 @@ public class SummaryReporter extends AReporter {
   
   /**
    * @see de.monticore.generating.templateengine.reporting.commons.DefaultReportEventHandler#reportSetAfterTemplate(java.lang.String,
-   * java.util.List)
+   * Optional, java.util.List)
    */
   @Override
-  public void reportSetAfterTemplate(String template, List<? extends HookPoint> afterHps) {
+  public void reportSetAfterTemplate(String template, Optional<ASTNode> ast, List<? extends HookPoint> afterHps) {
     for (HookPoint hp : afterHps) {
       if (hp != null && hp instanceof CodeHookPoint) {
         numSetCodeHookpoints++;

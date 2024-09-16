@@ -6,8 +6,10 @@ import de.monticore.expressions.combineexpressionswithliterals.CombineExpression
 import de.monticore.expressions.combineexpressionswithliterals._symboltable.ICombineExpressionsWithLiteralsArtifactScope;
 import de.monticore.expressions.combineexpressionswithliterals._symboltable.ICombineExpressionsWithLiteralsGlobalScope;
 import de.monticore.expressions.combineexpressionswithliterals._symboltable.ICombineExpressionsWithLiteralsScope;
+import de.monticore.expressions.commonexpressions._ast.ASTFieldAccessExpression;
 import de.monticore.expressions.expressionsbasis.ExpressionsBasisMill;
 import de.monticore.expressions.expressionsbasis._ast.ASTExpression;
+import de.monticore.expressions.expressionsbasis._ast.ASTNameExpression;
 import de.monticore.expressions.expressionsbasis._visitor.ExpressionsBasisTraverser;
 import de.monticore.expressions.expressionsbasis._visitor.ExpressionsBasisVisitor2;
 import de.monticore.symbols.basicsymbols.BasicSymbolsMill;
@@ -25,8 +27,9 @@ import de.monticore.symbols.oosymbols._symboltable.MethodSymbol;
 import de.monticore.symbols.oosymbols._symboltable.OOTypeSymbol;
 import de.monticore.types.check.SymTypeExpression;
 import de.monticore.types.check.SymTypeExpressionFactory;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -40,14 +43,11 @@ import static de.monticore.types.check.SymTypeExpressionFactory.createTypeObject
 import static de.monticore.types.check.SymTypeExpressionFactory.createTypeVariable;
 import static de.monticore.types.check.SymTypeExpressionFactory.createUnion;
 import static de.monticore.types3.util.DefsTypesForTests.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class CommonExpressionTypeVisitorTest
     extends AbstractTypeVisitorTest {
 
-  @Before
+  @BeforeEach
   public void init() {
     setupValues();
     SymTypeRelations.init();
@@ -68,6 +68,10 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("2147483647 + 0", "int"); // expected int and provided int
     checkExpr("varchar + varchar", "int"); // + applicable to char, char, result is int
     checkExpr("3 + \"Hallo\"", "String"); // example with String
+    checkExpr("1m + 1m", "[m]<int>");
+    checkExpr("1m + 1.0m", "[m]<double>");
+    checkExpr("1m^2 + 1m^2", "[m^2]<int>");
+    checkExpr("1m + 1km", "[m]<int>");
   }
 
   @Test
@@ -133,6 +137,9 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = 0.1 + 1l", "0xA0179"); // expected long but provided double
     checkErrorExpr("varfloat = 0.1f + 0.1", "0xA0179"); // expected float but provided double
     checkErrorExpr("varfloat = 0.1 + 0.1f", "0xA0179"); // expected float but provided double
+    checkErrorExpr("1m + 1", "0xB0163");
+    checkErrorExpr("1 + 1m", "0xB0163");
+    checkErrorExpr("1m + 1s", "0xB0163");
   }
 
   @Test
@@ -148,6 +155,10 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("varlong - varlong", "long"); // - applicable to long, long, result is long
     checkExpr("varfloat - varfloat", "float"); // - applicable to float, float, result is float
     checkExpr("vardouble - vardouble", "double"); // - applicable to double, double, result is double
+    checkExpr("1m - 1m", "[m]<int>");
+    checkExpr("1m - 1.0m", "[m]<double>");
+    checkExpr("1m^2 - 1m^2", "[m^2]<int>");
+    checkExpr("1m - 1km", "[m]<int>");
   }
 
   @Test
@@ -206,6 +217,9 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = 0.1 - 1l", "0xA0179"); // expected long but provided double
     checkErrorExpr("varfloat = 0.1f - 0.1", "0xA0179"); // expected float but provided double
     checkErrorExpr("varfloat = 0.1 - 0.1f", "0xA0179"); // expected float but provided double
+    checkErrorExpr("1m - 1", "0xB0163");
+    checkErrorExpr("1 - 1m", "0xB0163");
+    checkErrorExpr("1m - 1s", "0xB0163");
   }
 
   @Test
@@ -220,6 +234,13 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("varlong * varlong", "long"); // * applicable to long, long, result is long
     checkExpr("varfloat * varfloat", "float"); // * applicable to float, float, result is float
     checkExpr("vardouble * vardouble", "double"); // * applicable to double, double, result is double
+    checkExpr("1m * 1m", "[m^2]<int>");
+    checkExpr("1m * 1.0m", "[m^2]<double>");
+    checkExpr("1m^2 * 1m", "[m^3]<int>");
+    checkExpr("1m * 1km", "[m^2]<int>");
+    checkExpr("1m * 1", "[m]<int>");
+    checkExpr("1 * 1m", "[m]<int>");
+    checkExpr("1m * 1s", "[m^1s]<int>");
   }
 
   @Test
@@ -275,6 +296,13 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varchar = 0.1f * 1", "0xA0179"); // expected char but provided float
     checkErrorExpr("varchar = 1 * 0.1", "0xA0179"); // expected char but provided double
     checkErrorExpr("varchar = 0.1 * 1", "0xA0179"); // expected char but provided double
+    checkExpr("1m * 1m", "[m^2]<int>");
+    checkExpr("1m * 1.0m", "[m^2]<double>");
+    checkExpr("1m^2 * 1m", "[m^3]<int>");
+    checkExpr("1m * 1km", "[m^2]<int>");
+    checkExpr("1m * 1", "[m]<int>");
+    checkExpr("1 * 1m", "[m]<int>");
+    checkExpr("1m * 1s", "[m^1s]<int>");
   }
 
   @Test
@@ -288,6 +316,14 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("varlong / varlong", "long"); // / applicable to long, long, result is long
     checkExpr("varfloat / varfloat", "float"); // / applicable to float, float, result is float
     checkExpr("vardouble / vardouble", "double"); // / applicable to double, double, result is double
+    checkExpr("1m / 1m", "int");
+    checkExpr("1m / 1.0m", "double");
+    checkExpr("1m^2 / 1m", "[m]<int>");
+    checkExpr("1m / 1km", "int");
+    checkExpr("1m / 1", "[m]<int>");
+    checkExpr("1 / 1m", "[1/m]<int>");
+    checkExpr("1m / 1s", "[m/s]<int>");
+    checkExpr("1m^1s / 1s", "[m]<int>");
   }
 
   @Test
@@ -356,6 +392,10 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("varlong % varlong", "long"); // % applicable to long, long, result is long
     checkExpr("varfloat % varfloat", "float"); // % applicable to float, float, result is float
     checkExpr("vardouble % vardouble", "double"); // % applicable to double, double, result is double
+    checkExpr("1m % 1m", "[m]<int>");
+    checkExpr("1m % 1.0m", "[m]<double>");
+    checkExpr("1m^2 % 1m^2", "[m^2]<int>");
+    checkExpr("1m % 1km", "[m]<int>");
   }
 
   @Test
@@ -408,6 +448,9 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = 0.1 % 1l", "0xA0179"); // expected long but provided double
     checkErrorExpr("varfloat = 0.1f % 0.1", "0xA0179"); // expected float but provided double
     checkErrorExpr("varfloat = 0.1 % 0.1f", "0xA0179"); // expected float but provided double
+    checkErrorExpr("1m % 1", "0xB0163");
+    checkErrorExpr("1 % 1m", "0xB0163");
+    checkErrorExpr("1m % 1s", "0xB0163");
   }
 
   @Test
@@ -461,6 +504,8 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("vardouble <= varlong", "boolean"); // <= applicable to double, long, result is boolean
     checkExpr("vardouble <= varfloat", "boolean"); // <= applicable to double, float, result is boolean
     checkExpr("vardouble <= vardouble", "boolean"); // <= applicable to double, double, result is boolean
+    checkExpr("1m <= 1m", "boolean");
+    checkExpr("1m <= 1km", "boolean");
   }
 
   @Test
@@ -486,6 +531,8 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = varlong <= varlong", "0xA0179"); // expected long but provided boolean
     checkErrorExpr("varfloat = varfloat <= varfloat", "0xA0179"); // expected float but provided boolean
     checkErrorExpr("vardouble = vardouble <= vardouble", "0xA0179"); // expected double but provided boolean
+    checkErrorExpr("1m <= 1s", "0xB0167");
+    checkErrorExpr("1m <= 1", "0xB0167");
   }
 
   @Test
@@ -539,6 +586,8 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("vardouble >= varlong", "boolean"); // >= applicable to double, long, result is boolean
     checkExpr("vardouble >= varfloat", "boolean"); // >= applicable to double, float, result is boolean
     checkExpr("vardouble >= vardouble", "boolean"); // >= applicable to double, double, result is boolean
+    checkExpr("1m >= 1m", "boolean");
+    checkExpr("1m >= 1km", "boolean");
   }
 
   @Test
@@ -564,6 +613,8 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = varlong >= varlong", "0xA0179"); // expected long but provided boolean
     checkErrorExpr("varfloat = varfloat >= varfloat", "0xA0179"); // expected float but provided boolean
     checkErrorExpr("vardouble = vardouble >= vardouble", "0xA0179"); // expected double but provided boolean
+    checkErrorExpr("1m >= 1s", "0xB0167");
+    checkErrorExpr("1m >= 1", "0xB0167");
   }
 
   @Test
@@ -617,6 +668,8 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("vardouble < varlong", "boolean"); // < applicable to double, long, result is boolean
     checkExpr("vardouble < varfloat", "boolean"); // < applicable to double, float, result is boolean
     checkExpr("vardouble < vardouble", "boolean"); // < applicable to double, double, result is boolean
+    checkExpr("1m < 1m", "boolean");
+    checkExpr("1m < 1km", "boolean");
   }
 
   @Test
@@ -642,6 +695,8 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = varlong < varlong", "0xA0179"); // expected long but provided boolean
     checkErrorExpr("varfloat = varfloat < varfloat", "0xA0179"); // expected float but provided boolean
     checkErrorExpr("vardouble = vardouble < vardouble", "0xA0179"); // expected double but provided boolean
+    checkErrorExpr("1m < 1s", "0xB0167");
+    checkErrorExpr("1m < 1", "0xB0167");
   }
 
   @Test
@@ -695,6 +750,8 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("vardouble > varlong", "boolean"); // > applicable to double, long, result is boolean
     checkExpr("vardouble > varfloat", "boolean"); // > applicable to double, float, result is boolean
     checkExpr("vardouble > vardouble", "boolean"); // > applicable to double, double, result is boolean
+    checkExpr("1m > 1m", "boolean");
+    checkExpr("1m > 1km", "boolean");
   }
 
   @Test
@@ -720,6 +777,8 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = varlong > varlong", "0xA0179"); // expected long but provided boolean
     checkErrorExpr("varfloat = varfloat > varfloat", "0xA0179"); // expected float but provided boolean
     checkErrorExpr("vardouble = vardouble > vardouble", "0xA0179"); // expected double but provided boolean
+    checkErrorExpr("1m > 1s", "0xB0167");
+    checkErrorExpr("1m > 1", "0xB0167");
   }
 
   @Test
@@ -775,6 +834,8 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("vardouble == vardouble", "boolean"); // == applicable to double, double, result is boolean
     checkExpr("student1 == student2", "boolean"); // example with two objects of the same class
     checkExpr("person1 == student1", "boolean"); // example with two objects in sub-supertype relation
+    checkExpr("1m == 1m", "boolean");
+    checkExpr("1m == 1km", "boolean");
   }
 
   @Test
@@ -801,6 +862,8 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varfloat = varfloat == varfloat", "0xA0179"); // expected float but provided boolean
     checkErrorExpr("vardouble = vardouble == vardouble", "0xA0179"); // expected double but provided boolean
     checkErrorExpr("person1==varboolean", "0xB0166");
+    checkErrorExpr("1m == 1s", "0xB0166");
+    checkErrorExpr("1m == 1", "0xB0166");
   }
 
   @Test
@@ -856,6 +919,8 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("vardouble != vardouble", "boolean"); // != applicable to double, double, result is boolean
     checkExpr("person1!=person2", "boolean"); // example with two objects of the same class
     checkExpr("student2!=person2", "boolean"); //example with two objects in sub-supertype relation
+    checkExpr("1m != 1m", "boolean");
+    checkExpr("1m != 1km", "boolean");
   }
 
   @Test
@@ -882,6 +947,8 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("aFloat = aFloat != aFloat", "0xFD118"); // expected float but provided boolean
     checkErrorExpr("aDouble = aDouble != aDouble", "0xFD118"); // expected double but provided boolean
     checkErrorExpr("person1!=varboolean", "0xB0166"); // person1 is a Person, foo is a boolean
+    checkErrorExpr("1m != 1s", "0xB0166");
+    checkErrorExpr("1m != 1", "0xB0166");
   }
 
   @Test
@@ -963,6 +1030,7 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = varboolean && varboolean", "0xA0179"); // expected long but provided boolean
     checkErrorExpr("varfloat = varboolean && varboolean", "0xA0179"); // expected float but provided boolean
     checkErrorExpr("vardouble = varboolean && varboolean", "0xA0179"); // expected double but provided boolean
+    checkErrorExpr("1m && 1m", "0xB0113");
   }
 
   @Test
@@ -1044,6 +1112,7 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("varlong = varboolean || varboolean", "0xA0179"); // expected long but provided boolean
     checkErrorExpr("varfloat = varboolean || varboolean", "0xA0179"); // expected float but provided boolean
     checkErrorExpr("vardouble = varboolean || varboolean", "0xA0179"); // expected double but provided boolean
+    checkErrorExpr("1m || 1m", "0xB0113");
   }
 
   @Test
@@ -1070,6 +1139,7 @@ public class CommonExpressionTypeVisitorTest
     checkErrorExpr("!varlong", "0xB0164"); // ! not applicable to long
     checkErrorExpr("!varfloat", "0xB0164"); // ! not applicable to float
     checkErrorExpr("!vardouble", "0xB0164"); // ! not applicable to double
+    checkErrorExpr("!1m", "0xB0164");
   }
 
   @Test
@@ -1090,410 +1160,353 @@ public class CommonExpressionTypeVisitorTest
     ASTExpression astExpr = parseExpr("varboolean ? varbyte : varshort");
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    SymTypeExpression type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
-    assertFalse(SymTypeRelations.isCompatible(_byteSymType, type));
+    SymTypeExpression type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
+    Assertions.assertFalse(SymTypeRelations.isCompatible(_byteSymType, type));
 
     //test with two ints as true and false expression
     astExpr = parseExpr("3<4?9:10");
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     // test with boolean and int
     astExpr = parseExpr("3<4?true:7");
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertFalse(SymTypeRelations.isCompatible(_booleanSymType, type));
-    assertFalse(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertFalse(SymTypeRelations.isCompatible(_booleanSymType, type));
+    Assertions.assertFalse(SymTypeRelations.isCompatible(_intSymType, type));
 
     //test with float and long
     astExpr = parseExpr("3>4?4.5f:10L");
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
-    assertFalse(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    Assertions.assertFalse(SymTypeRelations.isCompatible(_longSymType, type));
 
     //test without primitive types as true and false expression
     astExpr = parseExpr("3<9?person1:person2");
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_personSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_personSymType, type));
 
     //test with two objects in a sub-supertype relation
     astExpr = parseExpr("3<9?student1:person2");
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_personSymType, type));
-    assertFalse(SymTypeRelations.isCompatible(_studentSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_personSymType, type));
+    Assertions.assertFalse(SymTypeRelations.isCompatible(_studentSymType, type));
 
     astExpr = parseExpr("varboolean ? 0 : 1"); // ? applicable to boolean
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varboolean ? varboolean : varboolean"); // ? applicable to boolean, boolean, result is boolean
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_booleanSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_booleanSymType, type));
 
     astExpr = parseExpr("varbyte = varboolean ? varbyte : varbyte"); // ? applicable to byte, byte, result is byte
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_byteSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_byteSymType, type));
 
     astExpr = parseExpr("varshort = varboolean ? varbyte : varshort"); // ? applicable to byte, short, result is short
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
 
     astExpr = parseExpr("varshort = varboolean ? varshort : varbyte"); // ? applicable to short, byte, result is short
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
 
     astExpr = parseExpr("varshort = varboolean ? varshort : varshort"); // ? applicable to short, short, result is short
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_shortSymType, type));
 
     astExpr = parseExpr("varchar = varboolean ? varchar : varchar"); // ? applicable to char, char, result is char
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_charSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_charSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varchar : varbyte"); // ? applicable to char, byte, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varbyte : varchar"); // ? applicable to byte, char, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varchar : varshort"); // ? applicable to char, short, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varshort : varchar"); // ? applicable to short, char, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varint : varbyte"); // ? applicable to int, byte, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varint : varshort"); // ? applicable to int, short, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varint : varchar"); // ? applicable to int, char, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varbyte : varint"); // ? applicable to byte, int, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varshort : varint"); // ? applicable to short, int, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varchar : varint"); // ? applicable to char, int, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_intSymType, type));
 
     astExpr = parseExpr("varint = varboolean ? varint : varint"); // ? applicable to int, int, result is int
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varlong : varbyte"); // ? applicable to long, byte, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varlong : varshort"); // ? applicable to long, short, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varlong : varchar"); // ? applicable to long, char, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varlong : varint"); // ? applicable to long, int, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varbyte : varlong"); // ? applicable to byte, long, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varshort : varlong"); // ? applicable to short, long, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varchar : varlong"); // ? applicable to char, long, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varint : varlong"); // ? applicable to int, long, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varlong = varboolean ? varlong : varlong"); // ? applicable to long, long, result is long
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_longSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varfloat : varbyte"); // ? applicable to float, byte, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varfloat : varshort"); // ? applicable to float, short, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varfloat : varchar"); // ? applicable to float, char, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varfloat : varint"); // ? applicable to float, int, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varfloat : varlong"); // ? applicable to float, long, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varbyte : varfloat"); // ? applicable to byte, float, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varshort : varfloat"); // ? applicable to short, float, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varchar : varfloat"); // ? applicable to char, float, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varint : varfloat"); // ? applicable to int, float, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varlong : varfloat"); // ? applicable to long, float, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("varfloat = varboolean ? varfloat : varfloat"); // ? applicable to float, float, result is float
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_floatSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? vardouble : varbyte"); // ? applicable to double, byte, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? vardouble : varshort"); // ? applicable to double, short, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? vardouble : varchar"); // ? applicable to double, char, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? vardouble : varint"); // ? applicable to double, int, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? vardouble : varlong"); // ? applicable to double, long, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? vardouble : varfloat"); // ? applicable to double, long, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? varbyte : vardouble"); // ? applicable to byte, double, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? varshort : vardouble"); // ? applicable to short, double, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? varchar : vardouble"); // ? applicable to char, double, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? varint : vardouble"); // ? applicable to int, double, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? varlong : vardouble"); // ? applicable to long, double, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? varfloat : vardouble"); // ? applicable to float, double, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
 
     astExpr = parseExpr("vardouble = varboolean ? vardouble : vardouble"); // ? applicable to double, double, result is double
     generateScopes(astExpr);
     assertNoFindings();
-    calculateTypes(astExpr);
-    type = getType4Ast().getTypeOfExpression(astExpr);
-    assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
+    type = TypeCheck3.typeOf(astExpr);
+    Assertions.assertTrue(SymTypeRelations.isCompatible(_doubleSymType, type));
   }
 
   @Test
@@ -1669,6 +1682,7 @@ public class CommonExpressionTypeVisitorTest
     testVariable.setIsStatic(true);
     OOTypeSymbol testInnerType = OOSymbolsMill.oOTypeSymbolBuilder()
         .setName("TestInnerType")
+        .setIsPublic(true)
         .setSpannedScope(CombineExpressionsWithLiteralsMill.scope())
         .setEnclosingScope(testScope)
         .build();
@@ -1718,6 +1732,58 @@ public class CommonExpressionTypeVisitorTest
 
     // test for nested field access ("firstLayer" is a static member, "onlyMember" is an instance member)
     checkExpr("types.DeepNesting.firstLayer.onlyMember", "int");
+  }
+
+  /**
+   * tests whether inner results are all present
+   */
+  @Test
+  public void deriveFromFieldAccessExpressionInnerResults() throws IOException {
+    //initialize symbol table
+    init_advanced();
+    ASTFieldAccessExpression astTestVariable = (ASTFieldAccessExpression)
+        parseExpr("types3.types2.Test.TestInnerType.testVariable");
+    ASTFieldAccessExpression astTestInnerType = (ASTFieldAccessExpression)
+        astTestVariable.getExpression();
+    ASTFieldAccessExpression astTest = (ASTFieldAccessExpression)
+        astTestInnerType.getExpression();
+    ASTFieldAccessExpression astTypes2 = (ASTFieldAccessExpression)
+        astTest.getExpression();
+    ASTNameExpression astTypes3 = (ASTNameExpression)
+        astTypes2.getExpression();
+    generateScopes(astTestVariable);
+    // calculate all the types
+    TypeCheck3.typeOf(astTestVariable);
+    assertNoFindings();
+    Assertions.assertTrue(getType4Ast().hasTypeOfExpression(astTestVariable));
+    Assertions.assertFalse(getType4Ast().hasTypeOfTypeIdentifierForName(astTestVariable));
+    Assertions.assertEquals("short", getType4Ast().getTypeOfExpression(astTestVariable).printFullName());
+    Assertions.assertFalse(getType4Ast().hasTypeOfExpression(astTestInnerType));
+    Assertions.assertTrue(getType4Ast().hasTypeOfTypeIdentifierForName(astTestInnerType));
+    Assertions.assertEquals("types3.types2.Test.TestInnerType", getType4Ast().getPartialTypeOfTypeIdForName(astTestInnerType).printFullName());
+    Assertions.assertFalse(getType4Ast().hasTypeOfExpression(astTest));
+    Assertions.assertTrue(getType4Ast().hasTypeOfTypeIdentifierForName(astTest));
+    Assertions.assertEquals("types3.types2.Test", getType4Ast().getPartialTypeOfTypeIdForName(astTest).printFullName());
+    Assertions.assertFalse(getType4Ast().hasTypeOfExpression(astTypes2));
+    Assertions.assertFalse(getType4Ast().hasTypeOfTypeIdentifierForName(astTypes2));
+    Assertions.assertFalse(getType4Ast().hasTypeOfExpression(astTypes3));
+    Assertions.assertFalse(getType4Ast().hasTypeOfTypeIdentifierForName(astTypes3));
+    assertNoFindings();
+  }
+
+  /**
+   * tests whether inner results are all present
+   */
+  @Test
+  public void deriveFromInvalidFieldAccessExpressionInnerProtectedClassResults() throws IOException {
+    //initialize symbol table
+    init_advanced();
+    // set the inner Class to protected, we only have public access.
+    OOTypeSymbol testInnerTypeSym = OOSymbolsMill.globalScope()
+        .resolveOOType("types3.types2.Test.TestInnerType")
+        .get();
+    testInnerTypeSym.setIsProtected(true);
+    checkErrorExpr("types3.types2.Test.TestInnerType.testVariable", "0xF736E");
   }
 
   @Test
@@ -2393,50 +2459,44 @@ public class CommonExpressionTypeVisitorTest
     ASTExpression astexpr = parseExpr("myAdd(null)");
     generateScopes(astexpr);
     astexpr.accept(scopeSetter);
-    calculateTypes(astexpr);
-    SymTypeExpression type = getType4Ast().getTypeOfExpression(astexpr);
+    SymTypeExpression type = TypeCheck3.typeOf(astexpr);
     assertNoFindings();
-    assertEquals("void", type.printFullName());
+    Assertions.assertEquals("void", type.printFullName());
 
     astexpr = parseExpr("myName");
     generateScopes(astexpr);
     astexpr.accept(scopeSetter);
-    calculateTypes(astexpr);
-    type = getType4Ast().getTypeOfExpression(astexpr);
+    type = TypeCheck3.typeOf(astexpr);
     assertNoFindings();
-    assertEquals("String", type.printFullName());
+    Assertions.assertEquals("String", type.printFullName());
 
     astexpr = parseExpr("next");
     generateScopes(astexpr);
     astexpr.accept(scopeSetter);
-    calculateTypes(astexpr);
-    type = getType4Ast().getTypeOfExpression(astexpr);
+    type = TypeCheck3.typeOf(astexpr);
     assertNoFindings();
-    assertEquals("MySubList.V", type.printFullName());
+    Assertions.assertEquals("MySubList.V", type.printFullName());
 
     astexpr = parseExpr("name");
     generateScopes(astexpr);
     astexpr.accept(scopeSetter);
-    calculateTypes(astexpr);
-    type = getType4Ast().getTypeOfExpression(astexpr);
+    type = TypeCheck3.typeOf(astexpr);
     assertNoFindings();
-    assertEquals("String", type.printFullName());
+    Assertions.assertEquals("String", type.printFullName());
 
     astexpr = parseExpr("parameter");
     generateScopes(astexpr);
     astexpr.accept(scopeSetter);
-    calculateTypes(astexpr);
-    type = getType4Ast().getTypeOfExpression(astexpr);
+    type = TypeCheck3.typeOf(astexpr);
     assertNoFindings();
-    assertEquals("MySubList.V", type.printFullName());
+    Assertions.assertEquals("MySubList.V", type.printFullName());
 
     astexpr = parseExpr("add(parameter)");
     generateScopes(astexpr);
     astexpr.accept(scopeSetter);
-    calculateTypes(astexpr);
-    type = getType4Ast().getTypeOfExpression(astexpr);
+    type = TypeCheck3.typeOf(astexpr);
     assertNoFindings();
-    assertEquals("void", type.printFullName());
+    Assertions.assertEquals("void", type.printFullName());
   }
 
   public void init_static_example() {
@@ -2667,12 +2727,12 @@ public class CommonExpressionTypeVisitorTest
     checkExpr("foo(c, b)", "B");
     checkExpr("foo(c, c)", "C");
 
-    checkErrorExpr("foo2(c, c, c)", "0xFDCBA");
+    checkErrorExpr("foo2(c, c, c)", "0xFD446");
 
-    checkErrorExpr("foo2(a, a)", "0xFDABE");
-    checkErrorExpr("foo2(b, a)", "0xFDABE");
-    checkErrorExpr("foo2(c, b)", "0xFDCBA");
-    checkErrorExpr("foo2(c, c)", "0xFDCBA");
+    checkErrorExpr("foo2(a, a)", "0xFD444");
+    checkErrorExpr("foo2(b, a)", "0xFD444");
+    checkErrorExpr("foo2(c, b)", "0xFD446");
+    checkErrorExpr("foo2(c, c)", "0xFD446");
 
     checkExpr("foo2(a, b)", "B");
     checkExpr("foo2(a, c)", "B");

@@ -9,11 +9,11 @@ import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import de.monticore.MontiCoreConfiguration;
 import de.monticore.MontiCoreScript;
+import de.monticore.StatisticsHandlerFix;
 import de.monticore.cli.updateChecker.UpdateCheckerRunnable;
 import de.monticore.generating.templateengine.reporting.Reporting;
 import de.monticore.grammar.grammar_withconcepts.Grammar_WithConceptsMill;
 import de.se_rwth.commons.logging.Log;
-
 import de.se_rwth.commons.logging.Slf4jLog;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang3.StringUtils;
@@ -63,6 +63,7 @@ public class MontiCoreTool {
     Log.init();
     Grammar_WithConceptsMill.init();
     new MontiCoreTool().run(args);
+    StatisticsHandlerFix.shutdown();
   }
 
   /**
@@ -212,7 +213,7 @@ public class MontiCoreTool {
     catch (JoranException e) {
       // this should not happen as we use this mechanism for the built-in
       // configurations (i.e. user.logging.xml and developer.logging.xml) 
-      Log.error("0xA1055 Failed to load default logback configuration " + path + ".");
+      Log.error("0xA1055 Failed to load default logback configuration " + path + ".", e);
     }
   }
   

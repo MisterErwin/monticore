@@ -8,34 +8,38 @@ import de.monticore.expressions.combineexpressionswithliterals._symboltable.ICom
 import de.monticore.expressions.combineexpressionswithliterals._visitor.CombineExpressionsWithLiteralsTraverser;
 import de.monticore.expressions.commonexpressions.types3.util.CommonExpressionsLValueRelations;
 import de.monticore.expressions.expressionsbasis._ast.ASTExpression;
-import de.monticore.types.check.FullDeriveFromCombineExpressionsWithLiterals;
-import de.monticore.types.check.FullSynthesizeFromCombineExpressionsWithLiterals;
 import de.monticore.types.check.IDerive;
+import de.monticore.types.check.SymTypeExpression;
 import de.monticore.types.check.TypeCheckResult;
 import de.monticore.types.check.types3wrapper.TypeCheck3AsIDerive;
 import de.monticore.types.check.types3wrapper.TypeCheck3AsISynthesize;
 import de.monticore.types.mcbasictypes._ast.ASTMCType;
 import de.monticore.types3.Type4Ast;
+import de.monticore.types3.TypeCheck3;
 import de.monticore.types3.util.CombineExpressionsWithLiteralsTypeTraverserFactory;
 import de.se_rwth.commons.logging.Log;
 import de.se_rwth.commons.logging.LogStub;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class LiteralAssignmentMatchesRegExExpressionCoCoTest {
 
-  @Before
+  @BeforeEach
   public void before() {
     LogStub.init();
     Log.enableFailQuick(false);
     CombineExpressionsWithLiteralsMill.reset();
     CombineExpressionsWithLiteralsMill.init();
+    new CombineExpressionsWithLiteralsTypeTraverserFactory()
+        .initTypeCheck3();
   }
 
   @Test
@@ -91,14 +95,14 @@ public class LiteralAssignmentMatchesRegExExpressionCoCoTest {
 
   protected void testValid(String type, String exprStr) throws IOException {
     check(type, exprStr);
-    assertTrue(Log.getFindings().isEmpty());
+    Assertions.assertTrue(Log.getFindings().isEmpty());
     Log.clearFindings();
   }
 
   protected void testInvalid(String type, String exprStr) throws IOException {
     check(type, exprStr);
-    assertEquals(1, Log.getFindings().size());
-    assertTrue(Log.getFindings().get(0).getMsg().startsWith("0xFD724"));
+    Assertions.assertEquals(1, Log.getFindings().size());
+    Assertions.assertTrue(Log.getFindings().get(0).getMsg().startsWith("0xFD724"));
     Log.clearFindings();
   }
 
@@ -108,42 +112,36 @@ public class LiteralAssignmentMatchesRegExExpressionCoCoTest {
     CombineExpressionsWithLiteralsTypeTraverserFactory factory =
         new CombineExpressionsWithLiteralsTypeTraverserFactory();
     Type4Ast type4Ast = new Type4Ast();
-    CombineExpressionsWithLiteralsTraverser traverser =
-        factory.createTraverser(type4Ast);
-    TypeCheck3AsIDerive derive = new TypeCheck3AsIDerive(
-        traverser, type4Ast, new CommonExpressionsLValueRelations());
-    TypeCheck3AsISynthesize synthesize =
-        new TypeCheck3AsISynthesize(traverser, type4Ast);
 
     Optional<ASTMCType> optType = CombineExpressionsWithLiteralsMill
         .parser()
         .parse_StringMCType(type);
-    assertTrue(optType.isPresent());
+    Assertions.assertTrue(optType.isPresent());
 
-    TypeCheckResult typeExpression = synthesize.synthesizeType(optType.get());
-    assertTrue(typeExpression.isPresentResult());
+    SymTypeExpression typeExpression = TypeCheck3.symTypeFromAST(optType.get());
+    assertFalse(typeExpression.isObscureType());
 
     CombineExpressionsWithLiteralsMill
         .globalScope()
         .add(CombineExpressionsWithLiteralsMill.variableSymbolBuilder()
         .setName("t")
-        .setType(typeExpression.getResult())
+        .setType(typeExpression)
         .build());
 
     Optional<ASTExpression> exprOpt = CombineExpressionsWithLiteralsMill
         .parser().parse_StringExpression(exprStr);
-    assertTrue(exprOpt.isPresent());
+    Assertions.assertTrue(exprOpt.isPresent());
 
     generateScopes(exprOpt.get());
 
-    assertTrue(Log.getFindings().isEmpty());
-    getChecker(derive).checkAll(exprOpt.get());
+    Assertions.assertTrue(Log.getFindings().isEmpty());
+    getChecker().checkAll(exprOpt.get());
   }
 
-  protected AssignmentExpressionsCoCoChecker getChecker(IDerive derive) {
+  protected AssignmentExpressionsCoCoChecker getChecker() {
     AssignmentExpressionsCoCoChecker checker =
         new AssignmentExpressionsCoCoChecker();
-    checker.addCoCo(new LiteralAssignmentMatchesRegExExpressionCoCo(derive));
+    checker.addCoCo(new LiteralAssignmentMatchesRegExExpressionCoCo());
     return checker;
   }
 

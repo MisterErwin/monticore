@@ -2,7 +2,8 @@
 package de.monticore.types.check;
 
 import de.monticore.symbols.basicsymbols.BasicSymbolsMill;
-import de.monticore.symbols.basicsymbols._symboltable.IBasicSymbolsGlobalScope;
+import de.monticore.symbols.basicsymbols._symboltable.IBasicSymbolsScope;
+import de.monticore.symbols.basicsymbols._symboltable.TypeVarSymbolSurrogate;
 import de.monticore.symboltable.serialization.JsonDeSers;
 import de.monticore.symboltable.serialization.JsonParser;
 import de.monticore.symboltable.serialization.JsonPrinter;
@@ -16,6 +17,14 @@ public class SymTypeVariableDeSer {
   protected static final String SERIALIZED_NAME = "varName";
 
   public String serialize(SymTypeVariable toSerialize) {
+    if (toSerialize.isInferenceVariable()) {
+      Log.error("0xFD234 internal error: "
+          + "trying to serialize a free type variable"
+          + ", only variables with symbols may be serialized: "
+          + toSerialize.printFullName()
+      );
+      return "";
+    }
     JsonPrinter jp = new JsonPrinter();
     jp.beginObject();
     jp.member(JsonDeSers.KIND, SERIALIZED_KIND);
@@ -29,10 +38,22 @@ public class SymTypeVariableDeSer {
   }
 
   public SymTypeVariable deserialize(JsonObject serialized) {
+    return deserialize(serialized, null);
+  }
+
+  /**
+   * @param enclosingScope can be null
+   */
+  public SymTypeVariable deserialize(JsonObject serialized, IBasicSymbolsScope enclosingScope) {
     if (serialized.hasStringMember(SERIALIZED_NAME)) {
       String varName = serialized.getStringMember(SERIALIZED_NAME);
-      IBasicSymbolsGlobalScope gs = BasicSymbolsMill.globalScope();
-      return SymTypeExpressionFactory.createTypeVariable(varName, gs);
+      if(enclosingScope == null) {
+        // support deprecated behavior:
+        enclosingScope = BasicSymbolsMill.globalScope();
+      }
+      TypeVarSymbolSurrogate typeVarSym = new TypeVarSymbolSurrogate(varName);
+      typeVarSym.setEnclosingScope(enclosingScope);
+      return SymTypeExpressionFactory.createTypeVariable(typeVarSym);
     }
     Log.error("0x823F5 Internal error: Cannot load \"" + serialized + "\" as  SymTypeVariable!");
     return null;

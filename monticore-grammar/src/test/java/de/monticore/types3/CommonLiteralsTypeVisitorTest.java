@@ -4,18 +4,19 @@ package de.monticore.types3;
 import de.monticore.expressions.combineexpressionswithliterals.CombineExpressionsWithLiteralsMill;
 import de.monticore.literals.mccommonliterals.MCCommonLiteralsMill;
 import de.monticore.literals.mcliteralsbasis._ast.ASTLiteral;
+import de.monticore.types.check.SymTypeExpression;
 import de.monticore.types3.util.DefsTypesForTests;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CommonLiteralsTypeVisitorTest extends AbstractTypeVisitorTest {
 
-  @Before
+  @BeforeEach
   public void setupForEach() {
     setupValues();
   }
@@ -96,8 +97,8 @@ public class CommonLiteralsTypeVisitorTest extends AbstractTypeVisitorTest {
         .setSource("50N1C")
         .build();
     lit.setEnclosingScope(CombineExpressionsWithLiteralsMill.globalScope());
-    lit.accept(getTypeMapTraverser());
-    assertFalse(getType4Ast().hasTypeOfExpression(lit));
+    SymTypeExpression type = TypeCheck3.typeOf(lit);
+    assertTrue(type.isObscureType());
     assertHasErrorCode("0xD02A6");
   }
 
@@ -137,8 +138,8 @@ public class CommonLiteralsTypeVisitorTest extends AbstractTypeVisitorTest {
 
   protected void check(ASTLiteral lit, String expected) {
     lit.setEnclosingScope(CombineExpressionsWithLiteralsMill.globalScope());
-    lit.accept(getTypeMapTraverser());
-    assertEquals(expected, getType4Ast().getTypeOfExpression(lit).printFullName());
+    SymTypeExpression type = TypeCheck3.typeOf(lit);
+    Assertions.assertEquals(expected, type.printFullName());
     assertNoFindings();
   }
 

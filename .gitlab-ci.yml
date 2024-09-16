@@ -1,5 +1,5 @@
 # (c) https://github.com/MontiCore/monticore
-image: registry.git.rwth-aachen.de/monticore/container-registry/gradle:7.4.2-jdk11
+image: registry.git.rwth-aachen.de/monticore/container-registry/gradle:7.6.4-jdk11
 
 #include:
 #  - template: Code-Quality.gitlab-ci.yml
@@ -25,11 +25,11 @@ stages:
   - build
   - test
   - deploy
+  - mirror  
   - trigger_languages
   - sonar
   - report
   - check
-  - mirror
 
 build:
   stage: build
@@ -70,7 +70,7 @@ test_01experiments:
   dependencies:
     - build
   script:
-    - "gradle -p monticore-test/01.experiments build $GRADLE_OPTS -PgenEMF=true -Pci --max-workers=4 --stacktrace"
+    - "gradle -p monticore-test/01.experiments build $GRADLE_OPTS -PgenEMF=true -PgenTagging=true -Pci --max-workers=4 --stacktrace"
   only:
     - merge_requests
     - branches
@@ -158,14 +158,13 @@ checkMLCs:
   dependencies:
     - build
   script:
-    - "gradle checkArtifacts"
+    - "gradle checkArtifacts --max-workers=4"
   artifacts:
     name: mlcreports
     when: always
     paths:
       - "**/target/reports/"
     expire_in: 1 week
-  allow_failure: true
   except:
     - master
 
@@ -255,14 +254,6 @@ trigger-montifun-dev:
   only:
     - dev
 
-trigger-siunits-dev:
-  stage: trigger_languages
-  trigger:
-    project: monticore/languages/siunits
-    branch: dev
-  only:
-    - dev
-
 trigger-sc-dev:
   stage: trigger_languages
   trigger:
@@ -292,7 +283,6 @@ trigger-umlp-dev:
   trigger:
     project: monticore/umlp
     branch: dev
-    strategy: depend
   only:
     - dev
 
@@ -309,7 +299,6 @@ trigger-cd4a-master:
   trigger:
     project: monticore/cd4analysis/cd4analysis
     branch: master
-    strategy: depend
   only:
     - master
 
@@ -366,14 +355,6 @@ trigger-montifun-main:
   trigger:
     project: monticore/languages/montifun
     branch: main
-  only:
-    - master
-
-trigger-siunits-master:
-  stage: trigger_languages
-  trigger:
-    project: monticore/languages/siunits
-    branch: master
   only:
     - master
 

@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.Stack;
+import java.util.stream.Collectors;
 
 /**
  * clones SymTypeExpressions
@@ -152,6 +153,30 @@ public class SymTypeDeepCloneVisitor implements ISymTypeVisitor {
   }
 
   @Override
+  public void visit(SymTypeOfSIUnit siUnit) {
+    List<SIUnitBasic> numerator = siUnit.getNumerator().stream()
+        .map(SIUnitBasic::deepClone)
+        .collect(Collectors.toList());
+    List<SIUnitBasic> denominator = siUnit.getDenominator().stream()
+        .map(SIUnitBasic::deepClone)
+        .collect(Collectors.toList());
+    pushTransformedSymType(
+        SymTypeExpressionFactory.createSIUnit(numerator, denominator)
+    );
+  }
+
+  @Override
+  public void visit(SymTypeOfNumericWithSIUnit numericWithSIUnit) {
+    numericWithSIUnit.getNumericType().accept(this);
+    SymTypeExpression numericType = popTransformedSubSymType();
+    numericWithSIUnit.getSIUnitType().accept(this);
+    SymTypeOfSIUnit siUnitType = (SymTypeOfSIUnit) popTransformedSubSymType();
+    pushTransformedSymType(SymTypeExpressionFactory.
+        createNumericWithSIUnit(siUnitType, numericType)
+    );
+  }
+
+  @Override
   public void visit(SymTypeVariable symType) {
     SymTypeVariable result;
     if (symType.hasTypeVarSymbol()) {
@@ -163,7 +188,7 @@ public class SymTypeDeepCloneVisitor implements ISymTypeVisitor {
     }
     else {
       result = SymTypeExpressionFactory.createTypeVariable(
-          null,
+          symType.getFreeVarIdentifier(),
           symType.getStoredLowerBound(),
           symType.getStoredUpperBound()
       );

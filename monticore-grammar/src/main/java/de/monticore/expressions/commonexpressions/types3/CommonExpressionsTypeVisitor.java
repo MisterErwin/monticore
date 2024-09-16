@@ -3,7 +3,6 @@ package de.monticore.expressions.commonexpressions.types3;
 
 import de.monticore.expressions.commonexpressions.CommonExpressionsMill;
 import de.monticore.expressions.commonexpressions._ast.*;
-import de.monticore.expressions.commonexpressions._util.CommonExpressionsTypeDispatcher;
 import de.monticore.expressions.commonexpressions._util.ICommonExpressionsTypeDispatcher;
 import de.monticore.expressions.commonexpressions._visitor.CommonExpressionsHandler;
 import de.monticore.expressions.commonexpressions._visitor.CommonExpressionsTraverser;
@@ -11,6 +10,8 @@ import de.monticore.expressions.commonexpressions._visitor.CommonExpressionsVisi
 import de.monticore.expressions.expressionsbasis._ast.ASTExpression;
 import de.monticore.expressions.expressionsbasis._ast.ASTNameExpression;
 import de.monticore.symbols.basicsymbols.BasicSymbolsMill;
+import de.monticore.symbols.basicsymbols._symboltable.FunctionSymbol;
+import de.monticore.symbols.basicsymbols._symboltable.VariableSymbol;
 import de.monticore.symboltable.modifiers.AccessModifier;
 import de.monticore.symboltable.modifiers.StaticAccessModifier;
 import de.monticore.types.check.SymTypeArray;
@@ -25,6 +26,7 @@ import de.monticore.types3.util.FunctionRelations;
 import de.monticore.types3.util.NameExpressionTypeCalculator;
 import de.monticore.types3.util.TypeContextCalculator;
 import de.monticore.types3.util.TypeVisitorLifting;
+import de.monticore.types3.util.TypeVisitorOperatorCalculator;
 import de.monticore.types3.util.WithinScopeBasicSymbolsResolver;
 import de.monticore.types3.util.WithinTypeBasicSymbolsResolver;
 import de.se_rwth.commons.Names;
@@ -36,12 +38,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static de.monticore.types.check.SymTypeExpressionFactory.createObscureType;
-import static de.monticore.types.check.SymTypeExpressionFactory.createPrimitive;
-import static de.monticore.types.check.SymTypeExpressionFactory.createTypeObject;
 import static de.monticore.types.check.SymTypeExpressionFactory.createUnion;
 
 /**
@@ -52,7 +53,18 @@ import static de.monticore.types.check.SymTypeExpressionFactory.createUnion;
 public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
     implements CommonExpressionsVisitor2, CommonExpressionsHandler {
 
+  // due to legacy reasons, error codes are identical for different operators,
+  // even if they use different implementations now,
+  // e.g., adding SIUnits required different implementations for '*' and '/'.
+  protected static final String ARITHMETIC_OPERATOR_ERROR_CODE = "0xB0163";
+  protected static final String NUMERIC_PREFIX_ERROR_CODE = "0xA017D";
+  protected static final String EQUALITY_OPERATOR_ERROR_CODE = "0xB0166";
+  protected static final String NUMERIC_COMPARISON_ERROR_CODE = "0xB0167";
+  protected static final String BOOLEAN_CONDITIONAL_ERROR_CODE = "0xB0113";
+
   protected CommonExpressionsTraverser traverser;
+
+  protected TypeVisitorOperatorCalculator operatorCalculator;
 
   protected WithinTypeBasicSymbolsResolver withinTypeResolver;
 
@@ -62,9 +74,11 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   protected WithinScopeBasicSymbolsResolver withinScopeResolver;
 
   protected CommonExpressionsTypeVisitor(
+      TypeVisitorOperatorCalculator operatorCalculator,
       WithinTypeBasicSymbolsResolver withinTypeResolver,
       TypeContextCalculator typeCtxCalc,
       WithinScopeBasicSymbolsResolver withinScopeResolver) {
+    this.operatorCalculator = operatorCalculator;
     this.withinTypeResolver = withinTypeResolver;
     this.typeCtxCalc = typeCtxCalc;
     this.withinScopeResolver = withinScopeResolver;
@@ -73,6 +87,7 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   public CommonExpressionsTypeVisitor() {
     // default values
     this(
+        new TypeVisitorOperatorCalculator(),
         new WithinTypeBasicSymbolsResolver(),
         new TypeContextCalculator(),
         new WithinScopeBasicSymbolsResolver()
@@ -87,6 +102,11 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   @Override
   public void setTraverser(CommonExpressionsTraverser traverser) {
     this.traverser = traverser;
+  }
+
+  public void setOperatorCalculator(
+      TypeVisitorOperatorCalculator operatorCalculator) {
+    this.operatorCalculator = operatorCalculator;
   }
 
   public void setWithinTypeBasicSymbolsResolver(
@@ -104,12 +124,15 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   }
 
   /**
-   * @param resolver
    * @deprecated use {@link #setWithinScopeResolver}
    */
   @Deprecated
   public void setNameExpressionTypeCalculator(NameExpressionTypeCalculator resolver) {
     setWithinScopeResolver(resolver);
+  }
+
+  protected TypeVisitorOperatorCalculator getOperatorCalculator() {
+    return operatorCalculator;
   }
 
   protected WithinTypeBasicSymbolsResolver getWithinTypeResolver() {
@@ -129,18 +152,20 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   @Override
   public void endVisit(ASTPlusPrefixExpression expr) {
     SymTypeExpression inner = getType4Ast().getPartialTypeOfExpr(expr.getExpression());
-    SymTypeExpression result = TypeVisitorLifting.liftDefault(
-        (innerType) -> calculateNumericPrefix(expr.getExpression(), "+", innerType)
-    ).apply(inner);
+    SymTypeExpression result = getTypeForPrefixOrLogError(
+        NUMERIC_PREFIX_ERROR_CODE, expr, "+",
+        getOperatorCalculator().plusPrefix(inner), inner
+    );
     getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTMinusPrefixExpression expr) {
     SymTypeExpression inner = getType4Ast().getPartialTypeOfExpr(expr.getExpression());
-    SymTypeExpression result = TypeVisitorLifting.liftDefault(
-        (innerType) -> calculateNumericPrefix(expr.getExpression(), "-", innerType)
-    ).apply(inner);
+    SymTypeExpression result = getTypeForPrefixOrLogError(
+        NUMERIC_PREFIX_ERROR_CODE, expr, "-",
+        getOperatorCalculator().minusPrefix(inner), inner
+    );
     getType4Ast().setTypeOfExpression(expr, result);
   }
 
@@ -150,147 +175,160 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   public void endVisit(ASTPlusExpression expr) {
     SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
     SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
-
-    SymTypeExpression result = TypeVisitorLifting
-        .liftDefault((leftPar, rightPar) -> calculatePlusExpression(expr, leftPar, rightPar))
-        .apply(left, right);
-
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        ARITHMETIC_OPERATOR_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().plus(left, right), left, right
+    );
     getType4Ast().setTypeOfExpression(expr, result);
-  }
-
-  protected SymTypeExpression calculatePlusExpression(ASTPlusExpression expr, SymTypeExpression left, SymTypeExpression right) {
-    SymTypeExpression result;
-    // if one part of the expression is a String
-    // then the whole expression is a String
-    if (SymTypeRelations.isString(left)) {
-      result = createTypeObject(left.getTypeInfo());
-    }
-    else if (SymTypeRelations.isString(right)) {
-      result = createTypeObject(right.getTypeInfo());
-    }
-    // no String in the expression
-    // -> use the normal calculation for the basic arithmetic operators
-    else {
-      result = calculateArithmeticExpression(expr, expr.getOperator());
-    }
-    return result;
   }
 
   @Override
   public void endVisit(ASTMultExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateArithmeticExpression(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        ARITHMETIC_OPERATOR_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().multiply(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTDivideExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateArithmeticExpression(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        ARITHMETIC_OPERATOR_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().divide(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTMinusExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateArithmeticExpression(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        ARITHMETIC_OPERATOR_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().minus(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTModuloExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateArithmeticExpression(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        ARITHMETIC_OPERATOR_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().modulo(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   // Numeric Comparison
 
   @Override
   public void endVisit(ASTLessEqualExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateNumericComparison(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        NUMERIC_COMPARISON_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().lessEqual(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTGreaterEqualExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateNumericComparison(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        NUMERIC_COMPARISON_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().greaterEqual(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTLessThanExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateNumericComparison(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        NUMERIC_COMPARISON_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().lessThan(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTGreaterThanExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateNumericComparison(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        NUMERIC_COMPARISON_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().greaterThan(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   // Equality
 
   @Override
   public void endVisit(ASTEqualsExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateEquality(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        EQUALITY_OPERATOR_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().equality(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTNotEqualsExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateEquality(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        EQUALITY_OPERATOR_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().inequality(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   // Conditional
 
   @Override
   public void endVisit(ASTBooleanAndOpExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateConditionalBooleanOp(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        BOOLEAN_CONDITIONAL_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().booleanAnd(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTBooleanOrOpExpression expr) {
-    getType4Ast().setTypeOfExpression(expr,
-        calculateConditionalBooleanOp(expr, expr.getOperator())
+    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
+    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
+    SymTypeExpression result = getTypeForInfixOrLogError(
+        BOOLEAN_CONDITIONAL_ERROR_CODE, expr, expr.getOperator(),
+        getOperatorCalculator().booleanOr(left, right), left, right
     );
+    getType4Ast().setTypeOfExpression(expr, result);
   }
 
   @Override
   public void endVisit(ASTLogicalNotExpression expr) {
     SymTypeExpression inner =
         getType4Ast().getPartialTypeOfExpr(expr.getExpression());
-    SymTypeExpression result = TypeVisitorLifting
-        .liftDefault((symType) -> calculateLogicalNotExpression(expr, symType))
-        .apply(inner);
+    SymTypeExpression result = getTypeForPrefixOrLogError(
+        "0xB0164", expr, "!",
+        getOperatorCalculator().logicalNot(inner), inner
+    );
     getType4Ast().setTypeOfExpression(expr, result);
-  }
-
-  protected SymTypeExpression calculateLogicalNotExpression(
-      ASTLogicalNotExpression expr,
-      SymTypeExpression inner) {
-    if (SymTypeRelations.isBoolean(inner)) {
-      return createPrimitive(BasicSymbolsMill.BOOLEAN);
-    }
-    else {
-      // operator not applicable
-      Log.error("0xB0164 Operator '!' not applicable to "
-              + "'" + inner.print() + "'",
-          expr.get_SourcePositionStart(),
-          expr.get_SourcePositionEnd()
-      );
-      return createObscureType();
-    }
   }
 
   @Override
@@ -331,27 +369,11 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   public void endVisit(ASTBooleanNotExpression expr) {
     SymTypeExpression inner =
         getType4Ast().getPartialTypeOfExpr(expr.getExpression());
-    SymTypeExpression result = TypeVisitorLifting.liftDefault(
-        (symType) -> calculateBooleanNotExpression(expr, symType)
-    ).apply(inner);
+    SymTypeExpression result = getTypeForPrefixOrLogError(
+        "0xB0175", expr, "~",
+        getOperatorCalculator().bitwiseComplement(inner), inner
+    );
     getType4Ast().setTypeOfExpression(expr, result);
-  }
-
-  protected SymTypeExpression calculateBooleanNotExpression(
-      ASTBooleanNotExpression expr,
-      SymTypeExpression inner) {
-    if (SymTypeRelations.isIntegralType(inner)) {
-      return SymTypeRelations.numericPromotion(inner);
-    }
-    else {
-      // operator not applicable
-      Log.error("0xB0175 Operator '~' not applicable to "
-              + "'" + inner.print() + "'",
-          expr.get_SourcePositionStart(),
-          expr.get_SourcePositionEnd()
-      );
-      return createObscureType();
-    }
   }
 
   @Override
@@ -498,17 +520,17 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
       args.add(getType4Ast().getPartialTypeOfExpr(expr.getArguments().getExpression(i)));
     }
     Set<SymTypeExpression> inner;
-    if (getType4Ast().getPartialTypeOfExpr(expr.getExpression())
-        .isIntersectionType()) {
+    SymTypeExpression calculatedInner = SymTypeRelations.normalize(
+        getType4Ast().getPartialTypeOfExpr(expr.getExpression())
+    );
+    if (calculatedInner.isIntersectionType()) {
       inner = new HashSet<>(
-          ((SymTypeOfIntersection) getType4Ast()
-              .getPartialTypeOfExpr(expr.getExpression())
-          ).getIntersectedTypeSet()
+          ((SymTypeOfIntersection)calculatedInner).getIntersectedTypeSet()
       );
     }
     else {
       inner = new HashSet<>();
-      inner.add(getType4Ast().getPartialTypeOfExpr(expr.getExpression()));
+      inner.add(calculatedInner);
     }
 
     // error already logged if Obscure
@@ -560,7 +582,7 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
             .map(f -> f.getWithFixedArity(args.size()))
             .collect(Collectors.toSet());
         Optional<SymTypeOfFunction> mostSpecificFunction =
-            FunctionRelations.getMostSpecificFunction(callableFuncs);
+            FunctionRelations.getMostSpecificFunctionOrLogError(callableFuncs);
         if (mostSpecificFunction.isPresent()) {
           type = mostSpecificFunction.get().getType().deepClone();
         }
@@ -570,6 +592,31 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
       }
     }
     getType4Ast().setTypeOfExpression(expr, type);
+  }
+
+  /**
+   * defines which results are expected of a FieldAccessExpression.
+   * s.a. {@link #fieldAccessCustomTraverse(ASTFieldAccessExpression)}
+   */
+  protected enum FieldAccessExpectedResult {
+    /**
+     * A type can, but does not have to be calculated,
+     * This is the case if the name can refer to a package.
+     */
+    OPTIONAL,
+    /**
+     * A type needs to be calculated, however,
+     * it can either be of an expression or a type identifier.
+     * This is the case if a type has already been calculated, e.g.,
+     * if a.b is a type identifier, a.b.c is required to have a type.
+     */
+    ANY,
+    /**
+     * An expression type needs to be calculated.
+     * This is the case if this is the topmost fieldAccessExpression, e.g.,
+     * a.b.c has to be an expression if there exists no d afterwards: a.b.c.d
+     */
+    EXPRESSION_TYPE,
   }
 
   @Override
@@ -601,29 +648,23 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
       if (expr.getExpression() instanceof ASTFieldAccessExpression) {
         ASTFieldAccessExpression innerFieldAccessExpr =
             (ASTFieldAccessExpression) (expr.getExpression());
-        fieldAccessCustomTraverse(innerFieldAccessExpr);
+        fieldAccessCustomTraverse(
+            innerFieldAccessExpr
+        );
         // if expression or type identifier has been found,
         // continue to require further results
-        boolean resultsAreOptional =
-            !getType4Ast().hasTypeOfExpression(expr.getExpression()) &&
-                !getType4Ast().hasTypeOfTypeIdentifierForName(expr.getExpression());
-        calculateFieldAccess(innerFieldAccessExpr, resultsAreOptional);
+        if (!getType4Ast().hasTypeOfExpression(innerFieldAccessExpr.getExpression()) &&
+            !getType4Ast().hasTypeOfTypeIdentifierForName(innerFieldAccessExpr.getExpression())
+        ) {
+          calculateFieldAccess(innerFieldAccessExpr, FieldAccessExpectedResult.OPTIONAL);
+        }
+        else {
+          calculateFieldAccess(innerFieldAccessExpr, FieldAccessExpectedResult.ANY);
+        }
       }
       else if (expr.getExpression() instanceof ASTNameExpression) {
         ASTNameExpression nameExpr = (ASTNameExpression) (expr.getExpression());
-        Optional<SymTypeExpression> nameAsExprType =
-            calculateExprQName(nameExpr);
-        Optional<SymTypeExpression> nameAsTypeIdType =
-            calculateTypeIdQName(nameExpr);
-        if (nameAsExprType.isPresent()) {
-          getType4Ast().setTypeOfExpression(nameExpr, nameAsExprType.get());
-        }
-        else if (nameAsTypeIdType.isPresent()) {
-          getType4Ast().setTypeOfTypeIdentifierForName(
-              nameExpr,
-              nameAsTypeIdType.get()
-          );
-        }
+        calculateFieldAccessFirstName(nameExpr);
       }
       else {
         Log.error("0xFD5AC internal error:"
@@ -644,22 +685,35 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
 
   @Override
   public void endVisit(ASTFieldAccessExpression expr) {
-    calculateFieldAccess(expr, false);
+    calculateFieldAccess(expr, FieldAccessExpectedResult.EXPRESSION_TYPE);
   }
 
   /**
    * implementation for endVisit.
-   *
-   * @param resultsAreOptional whether an expression type has to be found,
-   *                           s. {@link #fieldAccessCustomTraverse(ASTFieldAccessExpression)}.
-   *                           Note that this flag is passed to functions
-   *                           calculating the types, simply to allow them
-   *                           to search differently given the knowledge
-   *                           that the given ASTFieldAccessExpression
-   *                           is an actual expression
+   * One needs to state whether an expression type has to be found,
+   * or a type identifier type suffices,
+   * s. {@link #fieldAccessCustomTraverse(ASTFieldAccessExpression)}.
+   * Note that this flag is passed to functions calculating the types,
+   * simply to allow them to search differently given the knowledge
+   * that the given ASTFieldAccessExpression is an actual expression.
    */
   protected void calculateFieldAccess(
-      ASTFieldAccessExpression expr, boolean resultsAreOptional) {
+      ASTFieldAccessExpression expr,
+      FieldAccessExpectedResult expectedResult
+  ) {
+    // First, handle Obscure
+    if ((getType4Ast().hasPartialTypeOfExpression(expr.getExpression()) &&
+        getType4Ast().getPartialTypeOfExpr(expr.getExpression()).isObscureType()
+    ) || (
+        isSeriesOfNames(expr.getExpression()) &&
+            getType4Ast().hasPartialTypeOfTypeIdentifierForName(expr.getExpression()) &&
+            getType4Ast().getPartialTypeOfTypeIdForName(expr.getExpression()).isObscureType()
+    )) {
+      getType4Ast().setTypeOfExpression(expr, SymTypeExpressionFactory.createObscureType());
+      getType4Ast().setTypeOfTypeIdentifierForName(expr, SymTypeExpressionFactory.createObscureType());
+      return;
+    }
+
     // after the non-visitor traversal, types have been calculated if they exist
     Optional<SymTypeExpression> exprType;
     Optional<SymTypeExpression> typeId = Optional.empty();
@@ -671,35 +725,75 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
     // in Java, if variable exists, typeIdentifier "." name is ignored,
     // even if variable "." name does not exist
     else if (getType4Ast().hasTypeOfTypeIdentifierForName(expr.getExpression())) {
-      exprType = calculateTypeIdFieldAccessOrLogError(expr, resultsAreOptional);
+      exprType = calculateTypeIdFieldAccessOrLogError(expr,
+          expectedResult != FieldAccessExpectedResult.EXPRESSION_TYPE);
       // case: typeid "." typeid2 ("." name), e.g., C1.CInner.staticVar
-      if (exprType.isEmpty() && resultsAreOptional) {
-        typeId = calculateInnerTypeIdFieldAccess(expr);
+      if (exprType.isEmpty() && expectedResult != FieldAccessExpectedResult.EXPRESSION_TYPE) {
+        // always expecting a result here, as we tried expressions already
+        typeId = calculateInnerTypeIdFieldAccessOrLogError(expr, false);
       }
     }
     // case: qualifier "." name
     else {
       // case: qualifier "." name as Expression
-      exprType = calculateExprQNameOrLogError(expr, resultsAreOptional);
+      exprType = calculateExprQNameOrLogError(expr,
+          expectedResult != FieldAccessExpectedResult.EXPRESSION_TYPE);
       // case qualifier "." name as type identifier
       // this requires an outer field-access (qualifier.name.field),
       // as the end result has to be an expression
-      if (exprType.isEmpty() && resultsAreOptional) {
+      if (exprType.isEmpty() && expectedResult == FieldAccessExpectedResult.OPTIONAL) {
         typeId = calculateTypeIdQName(expr);
       }
     }
 
     // store expression type
     if (exprType.isPresent()) {
-      getType4Ast().setTypeOfExpression(expr, exprType.get());
+      handleFieldAccessResolvedType(expr, exprType.get());
     }
-    else if (!resultsAreOptional) {
+    else if (expectedResult == FieldAccessExpectedResult.EXPRESSION_TYPE) {
       // error already logged
       getType4Ast().setTypeOfExpression(expr, SymTypeExpressionFactory.createObscureType());
     }
     // store type id
     if (typeId.isPresent()) {
       getType4Ast().setTypeOfTypeIdentifierForName(expr, typeId.get());
+    }
+    else if (exprType.isEmpty() && expectedResult == FieldAccessExpectedResult.ANY) {
+      // error already logged
+      getType4Ast().setTypeOfTypeIdentifierForName(expr, SymTypeExpressionFactory.createObscureType());
+    }
+  }
+
+  /**
+   * field accesses are a special case with regard to the visitor structure
+   * as such, this hook-point is required to enable generics support.
+   */
+  protected void handleFieldAccessResolvedType(
+      ASTFieldAccessExpression expr,
+      SymTypeExpression resolvedType
+  ) {
+    getType4Ast().setTypeOfExpression(expr, resolvedType);
+  }
+
+  /**
+   * Part of custom traversal for field access expressions.
+   * Results are always optional,
+   * as the name expression could be part of a qualified name.
+   */
+  protected void calculateFieldAccessFirstName(ASTNameExpression expr) {
+    Optional<SymTypeExpression> nameAsExprType =
+        calculateExprQName(expr);
+    Optional<SymTypeExpression> nameAsTypeIdType =
+        calculateTypeIdQName(expr);
+    if (nameAsExprType.isPresent()) {
+      // here there is no need for type inference
+      getType4Ast().setTypeOfExpression(expr, nameAsExprType.get());
+    }
+    else if (nameAsTypeIdType.isPresent()) {
+      getType4Ast().setTypeOfTypeIdentifierForName(
+          expr,
+          nameAsTypeIdType.get()
+      );
     }
   }
 
@@ -719,7 +813,11 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
       Log.error("0xF737F given expression of type "
               + getType4Ast().getPartialTypeOfExpr(expr.getExpression()).printFullName()
               + " unable to derive the type of the access \"."
-              + expr.getName() + "\"",
+              + expr.getName() + "\". You may want to check whether"
+              + System.lineSeparator()
+              + "  1. The element exists in the models/included symboltables"
+              + System.lineSeparator()
+              + "  2. The element's access modifier is set (e.g., to public)",
           expr.get_SourcePositionStart(),
           expr.get_SourcePositionEnd()
       );
@@ -740,7 +838,7 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   protected Optional<SymTypeExpression> calculateExprFieldAccess(
       ASTFieldAccessExpression expr,
       boolean resultsAreOptional) {
-    Set<SymTypeExpression> types = new HashSet<>();
+    Optional<SymTypeExpression> type;
     final String name = expr.getName();
     if (!getType4Ast().hasTypeOfExpression(expr.getExpression())) {
       Log.error("0xFD231 internal error:"
@@ -748,6 +846,7 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
           expr.get_SourcePositionStart(),
           expr.get_SourcePositionEnd()
       );
+      type = Optional.empty();
     }
     else {
       SymTypeExpression innerAsExprType =
@@ -757,23 +856,36 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
             getTypeCtxCalc().getAccessModifier(
                 innerAsExprType.getTypeInfo(), expr.getEnclosingScope()
             ) : AccessModifier.ALL_INCLUSION;
-        Optional<SymTypeExpression> variable =
-            getWithinTypeResolver().resolveVariable(innerAsExprType,
-                name,
-                modifier,
-                v -> true
+        type = resolveVariablesAndFunctionsWithinType(
+            innerAsExprType,
+            name,
+            modifier,
+            v -> true,
+            f -> true
+        );
+        // Log remark about access modifier,
+        // if access modifier is the reason it has not been resolved
+        if (type.isEmpty() && !resultsAreOptional) {
+          Optional<SymTypeExpression> potentialResult =
+              resolveVariablesAndFunctionsWithinType(
+                  innerAsExprType,
+                  name,
+                  AccessModifier.ALL_INCLUSION,
+                  v -> true,
+                  f -> true
+              );
+          if (potentialResult.isPresent()) {
+            Log.warn("tried to resolve \"" + name + "\""
+                    + " given expression of type "
+                    + innerAsExprType.printFullName()
+                    + " and symbols have been found"
+                    + ", but due to the access modifiers (e.g., public)"
+                    + ", nothing could be resolved",
+                expr.get_SourcePositionStart(),
+                expr.get_SourcePositionEnd()
             );
-        if (variable.isPresent()) {
-          types.add(variable.get());
+          }
         }
-        Collection<SymTypeOfFunction> functions =
-            getWithinTypeResolver().resolveFunctions(
-                innerAsExprType,
-                name,
-                modifier,
-                f -> true
-            );
-        types.addAll(functions);
       }
       // extension point
       else {
@@ -784,14 +896,10 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
             expr.get_SourcePositionStart(),
             expr.get_SourcePositionEnd()
         );
+        type = Optional.empty();
       }
     }
-    if (types.size() <= 1) {
-      return types.stream().findAny();
-    }
-    else {
-      return Optional.of(SymTypeExpressionFactory.createIntersection(types));
-    }
+    return type;
   }
 
   /**
@@ -803,7 +911,8 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
       ASTFieldAccessExpression expr,
       boolean resultsAreOptional
   ) {
-    Optional<SymTypeExpression> type = calculateTypeIdFieldAccess(expr);
+    Optional<SymTypeExpression> type =
+        calculateTypeIdFieldAccess(expr, resultsAreOptional);
     if (type.isEmpty() && !resultsAreOptional) {
       Log.error("0xF736F given type identifier of type "
               + getType4Ast().getPartialTypeOfTypeIdForName(expr.getExpression()).printFullName()
@@ -816,12 +925,6 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
     return type;
   }
 
-  @Deprecated
-  protected Optional<SymTypeExpression> calculateTypeIdFieldAccess(
-      ASTFieldAccessExpression expr) {
-    return calculateTypeIdFieldAccess(expr, false);
-  }
-
   /**
    * calculates a.b.c with a.b being a type identifier,
    * e.g., XClass.staticVar
@@ -830,13 +933,14 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
       ASTFieldAccessExpression expr,
       boolean resultsAreOptional) {
     final String name = expr.getName();
-    Set<SymTypeExpression> types = new HashSet<>();
+    Optional<SymTypeExpression> type;
     if (!getType4Ast().hasTypeOfTypeIdentifierForName(expr.getExpression())) {
       Log.error("0xFD232 internal error:"
               + "unable to find type identifier for field access",
           expr.get_SourcePositionStart(),
           expr.get_SourcePositionEnd()
       );
+      type = Optional.empty();
     }
     else {
       SymTypeExpression innerAsTypeIdType =
@@ -848,22 +952,37 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
                 expr.getEnclosingScope(),
                 true
             ) : StaticAccessModifier.STATIC;
-        Optional<SymTypeExpression> variable =
-            getWithinTypeResolver().resolveVariable(
-                innerAsTypeIdType,
-                name,
-                modifier,
-                v -> true
+        type = resolveVariablesAndFunctionsWithinType(
+            innerAsTypeIdType,
+            name,
+            modifier,
+            v -> true,
+            f -> true
+        );
+        // Log remark about access modifier,
+        // if access modifier is the reason it has not been resolved
+        if (type.isEmpty() && !resultsAreOptional) {
+          Optional<SymTypeExpression> potentialResult =
+              resolveVariablesAndFunctionsWithinType(
+                  innerAsTypeIdType,
+                  name,
+                  AccessModifier.ALL_INCLUSION,
+                  v -> true,
+                  f -> true
+              );
+          if (potentialResult.isPresent()) {
+            Log.warn("tried to resolve \"" + name + "\""
+                    + " given type identifier"
+                    + innerAsTypeIdType.printFullName()
+                    + " and symbols have been found"
+                    + ", but due to the access modifiers (e.g., static)"
+                    + ", nothing could be resolved.",
+                expr.get_SourcePositionStart(),
+                expr.get_SourcePositionEnd()
             );
-        variable.ifPresent(types::add);
-        Collection<SymTypeOfFunction> functions =
-            getWithinTypeResolver().resolveFunctions(
-                innerAsTypeIdType,
-                name,
-                modifier,
-                f -> true
-            );
-        types.addAll(functions);
+          }
+
+        }
       }
       // extension point
       else {
@@ -874,14 +993,28 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
             expr.get_SourcePositionStart(),
             expr.get_SourcePositionEnd()
         );
+        type = Optional.empty();
       }
     }
-    if (types.size() <= 1) {
-      return types.stream().findAny();
+    return type;
+  }
+
+  protected Optional<SymTypeExpression> calculateInnerTypeIdFieldAccessOrLogError(
+      ASTFieldAccessExpression expr,
+      boolean resultsAreOptional
+  ) {
+    Optional<SymTypeExpression> type =
+        calculateInnerTypeIdFieldAccess(expr);
+    if (type.isEmpty() && !resultsAreOptional) {
+      Log.error("0xF736E given type identifier of type "
+              + getType4Ast().getPartialTypeOfTypeIdForName(expr.getExpression()).printFullName()
+              + " unable to derive the type of the access \"."
+              + expr.getName() + "\"",
+          expr.get_SourcePositionStart(),
+          expr.get_SourcePositionEnd()
+      );
     }
-    else {
-      return Optional.of(SymTypeExpressionFactory.createIntersection(types));
-    }
+    return type;
   }
 
   /**
@@ -912,11 +1045,7 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
         type = getWithinTypeResolver().resolveType(
             innerAsTypeIdType,
             name,
-            getTypeCtxCalc().getAccessModifier(
-                innerAsTypeIdType.getTypeInfo(),
-                expr.getEnclosingScope(),
-                true
-            ),
+            modifier,
             t -> true
         );
       }
@@ -1033,6 +1162,43 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
   // Helper
 
   /**
+   * resolver helper function that searches for functions AND variables
+   * in a type at the same time
+   */
+  protected Optional<SymTypeExpression> resolveVariablesAndFunctionsWithinType(
+      SymTypeExpression innerAsExprType,
+      String name,
+      AccessModifier modifier,
+      Predicate<VariableSymbol> varPredicate,
+      Predicate<FunctionSymbol> funcPredicate
+  ) {
+    Set<SymTypeExpression> types = new HashSet<>();
+    Optional<SymTypeExpression> variable =
+        getWithinTypeResolver().resolveVariable(innerAsExprType,
+            name,
+            modifier,
+            varPredicate
+        );
+    if (variable.isPresent()) {
+      types.add(variable.get());
+    }
+    Collection<SymTypeOfFunction> functions =
+        getWithinTypeResolver().resolveFunctions(
+            innerAsExprType,
+            name,
+            modifier,
+            funcPredicate
+        );
+    types.addAll(functions);
+    if (types.size() <= 1) {
+      return types.stream().findAny();
+    }
+    else {
+      return Optional.of(SymTypeExpressionFactory.createIntersection(types));
+    }
+  }
+
+  /**
    * For FieldAccessExpression / CallExpression
    * given expression "." name,
    * expression may be a (qualified) name for
@@ -1078,76 +1244,21 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
     }
   }
 
-  protected SymTypeExpression calculateNumericPrefix(
-      ASTExpression innerExpr, String op, SymTypeExpression innerType) {
-    if (!SymTypeRelations.isNumericType(innerType)) {
-      Log.error("0xA017D Prefix Operator '" + op
-              + "' not applicable to " + "'" + innerType.print() + "'",
-          innerExpr.get_SourcePositionStart(),
-          innerExpr.get_SourcePositionEnd()
-      );
+  protected SymTypeExpression getTypeForInfixOrLogError(
+      String errorCode, ASTInfixExpression expr, String op,
+      Optional<SymTypeExpression> result,
+      SymTypeExpression left, SymTypeExpression right
+  ) {
+    if (left.isObscureType() || right.isObscureType()) {
       return createObscureType();
     }
-    // in Java, an evaluation of the actual value
-    // would take place (if possible)
-    return SymTypeRelations.numericPromotion(innerType);
-  }
-
-  /**
-   * for <=, >=, <, >
-   * calculates the resulting type
-   */
-  protected SymTypeExpression calculateNumericComparison(
-      ASTInfixExpression expr, String op) {
-    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
-    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
-    return TypeVisitorLifting.liftDefault((leftPar, rightPar) ->
-        calculateNumericComparison(expr, op, leftPar, rightPar)
-    ).apply(left, right);
-  }
-
-  protected SymTypeExpression calculateNumericComparison(
-      ASTInfixExpression expr, String op,
-      SymTypeExpression left, SymTypeExpression right) {
-    // if the left and the right part of the expression are numerics,
-    // then the whole expression is a boolean
-    if (SymTypeRelations.isNumericType(left) && SymTypeRelations.isNumericType(right)) {
-      return createPrimitive(BasicSymbolsMill.BOOLEAN);
+    else if (result.isPresent()) {
+      return result.get();
     }
     else {
       // operator not applicable
-      Log.error("0xB0167 Operator '" + op + "' not applicable to "
-              + "'" + left.print() + "', '"
-              + right.print() + "'",
-          expr.get_SourcePositionStart(),
-          expr.get_SourcePositionEnd()
-      );
-      return createObscureType();
-    }
-  }
-
-  /**
-   * for +, -, *, /, %
-   * + -> String not supported
-   * calculates the resulting type
-   */
-  protected SymTypeExpression calculateArithmeticExpression(
-      ASTInfixExpression expr, String op) {
-    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
-    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
-
-    return TypeVisitorLifting.liftDefault((SymTypeExpression leftPar, SymTypeExpression rightPar) ->
-        calculateArithmeticExpression(expr, op, leftPar, rightPar)
-    ).apply(left, right);
-  }
-
-  protected SymTypeExpression calculateArithmeticExpression(ASTInfixExpression expr, String op, SymTypeExpression left, SymTypeExpression right) {
-    if (SymTypeRelations.isNumericType(left) && SymTypeRelations.isNumericType(right)) {
-      return SymTypeRelations.numericPromotion(left, right);
-    }
-    else {
-      // operator not applicable
-      Log.error("0xB0163 Operator '" + op + "' not applicable to " +
+      Log.error(errorCode
+              + " Operator '" + op + "' not applicable to " +
               "'" + left.print() + "', '"
               + right.print() + "'",
           expr.get_SourcePositionStart(),
@@ -1157,74 +1268,20 @@ public class CommonExpressionsTypeVisitor extends AbstractTypeVisitor
     }
   }
 
-  /**
-   * for ==, !=
-   * calculates the resulting type
-   */
-  protected SymTypeExpression calculateEquality(
-      ASTInfixExpression expr, String op) {
-    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
-    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
-    return TypeVisitorLifting.liftDefault((leftPar, rightPar) ->
-        calculateEquality(expr, op, leftPar, rightPar)
-    ).apply(left, right);
-  }
-
-  /**
-   * for ==, !=
-   * calculates the resulting type
-   */
-  protected SymTypeExpression calculateEquality(
-      ASTInfixExpression expr, String op,
-      SymTypeExpression left, SymTypeExpression right) {
-
-    if (left.isPrimitive() || right.isPrimitive()) {
-      // skip unboxing + numeric promotion if applicable
-      if (SymTypeRelations.isNumericType(left) && SymTypeRelations.isNumericType(right)) {
-        return SymTypeExpressionFactory.createPrimitive(BasicSymbolsMill.BOOLEAN);
-      }
-      left = SymTypeRelations.unbox(left);
-      right = SymTypeRelations.unbox(right);
-    }
-    if (SymTypeRelations.isCompatible(left, right)
-        || SymTypeRelations.isCompatible(right, left)) {
-      return SymTypeExpressionFactory.createPrimitive(BasicSymbolsMill.BOOLEAN);
-    }
-    else {
-      Log.error("0xB0166 Operator '" + op + "' not applicable to " +
-              "'" + left.print() + "', '"
-              + right.print() + "'",
-          expr.get_SourcePositionStart(),
-          expr.get_SourcePositionEnd()
-      );
+  protected SymTypeExpression getTypeForPrefixOrLogError(
+      String errorCode, ASTExpression expr, String prefix,
+      Optional<SymTypeExpression> result, SymTypeExpression inner
+  ) {
+    if (inner.isObscureType()) {
       return createObscureType();
     }
-  }
-
-  /**
-   * for &&, ||
-   * calculates the resulting type
-   */
-  protected SymTypeExpression calculateConditionalBooleanOp(
-      ASTInfixExpression expr, String op) {
-    SymTypeExpression left = getType4Ast().getPartialTypeOfExpr(expr.getLeft());
-    SymTypeExpression right = getType4Ast().getPartialTypeOfExpr(expr.getRight());
-    return TypeVisitorLifting.liftDefault((leftPar, rightPar) ->
-        calculateConditionalBooleanOp(expr, op, leftPar, rightPar)
-    ).apply(left, right);
-  }
-
-  protected SymTypeExpression calculateConditionalBooleanOp(
-      ASTInfixExpression expr, String op,
-      SymTypeExpression left, SymTypeExpression right) {
-    if (SymTypeRelations.isBoolean(left) && SymTypeRelations.isBoolean(right)) {
-      return createPrimitive(BasicSymbolsMill.BOOLEAN);
+    else if (result.isPresent()) {
+      return result.get();
     }
     else {
-      // operator not applicable
-      Log.error("0xB0113 Operator '" + op + "' not applicable to " +
-              "'" + left.print() + "', '"
-              + right.print() + "'",
+      Log.error(errorCode
+              + " Prefix Operator '" + prefix
+              + "' not applicable to " + "'" + inner.print() + "'",
           expr.get_SourcePositionStart(),
           expr.get_SourcePositionEnd()
       );

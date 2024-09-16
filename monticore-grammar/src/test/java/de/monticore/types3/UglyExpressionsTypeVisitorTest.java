@@ -4,20 +4,22 @@ import de.monticore.symbols.oosymbols.OOSymbolsMill;
 import de.monticore.symbols.oosymbols._symboltable.IOOSymbolsGlobalScope;
 import de.monticore.symbols.oosymbols._symboltable.IOOSymbolsScope;
 import de.monticore.symbols.oosymbols._symboltable.MethodSymbol;
+import de.monticore.types.check.SymTypeExpressionFactory;
 import de.monticore.types3.util.DefsVariablesForTests;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
 import static de.monticore.types3.util.DefsTypesForTests._floatSymType;
 import static de.monticore.types3.util.DefsTypesForTests._intSymType;
 import static de.monticore.types3.util.DefsTypesForTests._personSymType;
+import static de.monticore.types3.util.DefsTypesForTests._unboxedListSymType;
 import static de.monticore.types3.util.DefsTypesForTests.method;
 
 public class UglyExpressionsTypeVisitorTest extends AbstractTypeVisitorTest {
 
-  @Before
+  @BeforeEach
   public void init() {
     DefsVariablesForTests.setup();
   }
@@ -104,13 +106,13 @@ public class UglyExpressionsTypeVisitorTest extends AbstractTypeVisitorTest {
     MethodSymbol constructor1 = method("Person", _personSymType, _intSymType);
     constructor1.setIsConstructor(true);
     personScope.add(constructor1);
-    checkErrorExpr("new Person(1.2f)", "0xFD553");
+    checkErrorExpr("new Person(1.2f)", "0xFD444");
     // constructors: () -> Person, (int) -> Person, (int) -> Person
     // no most specific constructor exists
     MethodSymbol constructor2 = method("Person", _personSymType, _intSymType);
     constructor2.setIsConstructor(true);
     personScope.add(constructor2);
-    checkErrorExpr("new Person(2)", "0xFD553");
+    checkErrorExpr("new Person(2)", "0xFD446");
   }
 
   @Test
@@ -118,6 +120,26 @@ public class UglyExpressionsTypeVisitorTest extends AbstractTypeVisitorTest {
     // requires Object Type
     checkErrorExpr("new int()", "0xFD552");
     checkErrorExpr("new R\"h(e|a)llo\"()", "0xFD552");
+  }
+
+  @Test
+  public void testGenericConstructorClassCreatorExpression() throws IOException {
+    IOOSymbolsGlobalScope gs = OOSymbolsMill.globalScope();
+    IOOSymbolsScope listScope = (IOOSymbolsScope)
+        gs.resolveType("List").get().getSpannedScope();
+    // constructors: () -> List<T>, (T) -> List<T>
+    MethodSymbol constructor0 = method("List", _unboxedListSymType);
+    constructor0.setIsConstructor(true);
+    listScope.add(constructor0);
+    MethodSymbol constructor1 = method("List", _unboxedListSymType,
+        SymTypeExpressionFactory.createTypeVariable(listScope.getTypeVarSymbols().values().get(0))
+    );
+    constructor1.setIsConstructor(true);
+    listScope.add(constructor1);
+
+    checkExpr("new List()", "List<int>", "List<int>");
+    checkExpr("new List(1)", "List<int>", "List<int>");
+    checkExpr("new List(1)", "List<int>");
   }
 
   @Test

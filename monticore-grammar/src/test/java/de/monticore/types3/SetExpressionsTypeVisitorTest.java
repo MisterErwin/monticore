@@ -7,8 +7,8 @@ import de.monticore.types.check.SymTypeExpressionFactory;
 import de.monticore.types.mccollectiontypes.types3.MCCollectionSymTypeRelations;
 import de.monticore.types.mccollectiontypes.types3.util.MCCollectionSymTypeFactory;
 import de.monticore.types3.util.DefsVariablesForTests;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
@@ -23,7 +23,7 @@ import static de.monticore.types3.util.DefsVariablesForTests._intUnboxedSetVarSy
 
 public class SetExpressionsTypeVisitorTest extends AbstractTypeVisitorTest {
 
-  @Before
+  @BeforeEach
   public void setup() {
     MCCollectionSymTypeRelations.init();
     DefsVariablesForTests.setup();
@@ -304,6 +304,12 @@ public class SetExpressionsTypeVisitorTest extends AbstractTypeVisitorTest {
     checkExpr("[1..1]", "List<int>");
     checkExpr("{1..5}", "Set<int>");
     checkExpr("[1..5]", "List<int>");
+    checkExpr("{1..(2+3)}", "Set<int>");
+    checkExpr("[1..(2+3)]", "List<int>");
+    checkExpr("{1..true?1:2}", "Set<int>");
+    checkExpr("[1..true?1:2]", "List<int>");
+    checkExpr("{1..(short)2}", "Set<int>");
+    checkExpr("[1..(short)2]", "List<int>");
     checkExpr("{1, 1..2, 2..3, 4}", "Set<int>");
     checkExpr("[1, 1..2, 2..3, 4]", "List<int>");
     // examples with char
@@ -327,6 +333,21 @@ public class SetExpressionsTypeVisitorTest extends AbstractTypeVisitorTest {
     checkErrorExpr("{1.0f .. 1}", "0xFD551");
     checkErrorExpr("{1 .. 1.0f}", "0xFD551");
     checkErrorExpr("{1.0f .. 1.0f}", "0xFD551");
+  }
+
+  @Test
+  public void deriveFromSetEnumerationWithTargetType() throws IOException {
+    checkExpr("{}", "Set<int>", "Set<int>");
+    checkExpr("{}", "Set<? extends Person>", "Set<Person>");
+    checkExpr("{}", "Set<? super Person>", "Set<Person>");
+    checkExpr("[]", "List<int>", "List<int>");
+    checkExpr("{{}}", "Set<Set<Set<int>>>", "Set<Set<Set<int>>>");
+    checkExpr("{[]}", "Set<List<Set<int>>>", "Set<List<Set<int>>>");
+    checkExpr("{[],[]}", "Set<List<Set<int>>>", "Set<List<Set<int>>>");
+    checkExpr("[[{[],[]},{}]]",
+        "List<List<Set<List<Set<int>>>>>",
+        "List<List<Set<List<Set<int>>>>>"
+    );
   }
 
 }
