@@ -138,6 +138,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ build-mc ]
     steps:
+      - name: Echo stuff
+        run: 'echo "github.ref: ${{ github.ref }} - github.ref: ${{ env.GITHUB_REF }}"'
       - name: Trigger MontiVerse
         uses: digital-blueprint/gitlab-pipeline-trigger-action@v1
         with:
@@ -147,7 +149,7 @@ jobs:
           id: '91803'  # montiverseci project id
           ref: 'main'
           # TODO: Include entire git path here instead (due to PRs)
-          variables: '{"MONTICORE_BRANCH":"${{env.GITHUB_REF}}"}'
+          variables: '{"MONTICORE_BRANCH":"${{github.ref}}"}'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAVEN_USER: ${{ secrets.SE_NEXUS_USER }}
