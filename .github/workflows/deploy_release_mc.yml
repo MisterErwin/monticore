@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Checkout project sources
         uses: actions/checkout@v3
-      - name: Test 01.experiments
+      - name: Gradle DeployMC
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: ${{env.GRADLE_VERSION}}

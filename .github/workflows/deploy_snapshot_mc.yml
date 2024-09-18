@@ -1,13 +1,13 @@
 # (c) https://github.com/MontiCore/monticore
 # This workflow publishes the jar of a (GitHub) publication
-name: Publish a Snapshot
+name: Gradle Test & Build
 
 concurrency: # run this deploy workflow only once per repository
   group: ${{ github.repository }}-${{ github.workflow }}
   cancel-in-progress: true
 
 on:
-  workflow_run:
+  workflow_run: # Note: This event will only trigger a workflow run if the workflow file is on the default branch
     workflows: [ Build & Test ]
     branches: [ dev, github-actions ]
     types:
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ["MisterErwin/statecharts"]
+        project: [ "MisterErwin/statecharts" ]
     steps:
       - name: Trigger ${{ matrix.project }}
         uses: peter-evans/repository-dispatch@v3
