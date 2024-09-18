@@ -1,10 +1,14 @@
 # (c) https://github.com/MontiCore/monticore
+# This workflow publishes the jar of a (GitHub) publication
 name: Publish a Snapshot
 
+concurrency: # run this deploy workflow only once per repository
+  group: ${{ github.repository }}-${{ github.workflow }}
+  cancel-in-progress: true
 
 on:
   workflow_run:
-    workflows: [ gradle mc ]
+    workflows: [ Build & Test ]
     branches: [ dev, github-actions ]
     types:
       - completed
@@ -35,4 +39,22 @@ jobs:
           MAVEN_USER: ${{ secrets.SE_NEXUS_USER }}
           MAVEN_PASSWORD: ${{ secrets.SE_NEXUS_PASSWORD }}
 
-# TODO: Trigger Downstream Projects (both on GitHub and GitLab)
+  # Trigger GitHub downstream projects
+
+  trigger-github-downstream:
+    needs: [ deploy-snapshot ]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ["MisterErwin/statecharts"]
+    steps:
+      - name: Trigger ${{ matrix.project }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DOWNSTREAM_PAT }}
+          repository: ${{ matrix.project }}
+          event-type: trigger_after_upstream_deploy
+
+  # Trigger (internal) GitLab downstream projects
+
+  # TODO: Trigger correct Downstream Projects (both on GitHub and GitLab)
