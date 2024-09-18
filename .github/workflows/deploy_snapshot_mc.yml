@@ -1,6 +1,6 @@
 # (c) https://github.com/MontiCore/monticore
 # This workflow publishes the jar of a (GitHub) publication
-name: Gradle Test & Build
+name: Gradle Deploy Snapshot
 
 concurrency: # run this deploy workflow only once per repository
   group: ${{ github.repository }}-${{ github.workflow }}
