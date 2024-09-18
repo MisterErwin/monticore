@@ -8,7 +8,7 @@ concurrency: # run this deploy workflow only once per repository
 
 on:
   workflow_run: # Note: This event will only trigger a workflow run if the workflow file is on the default branch
-    workflows: [ Build & Test ]
+    workflows: [ Gradle Test & Build ]
     branches: [ dev, github-actions ]
     types:
       - completed
