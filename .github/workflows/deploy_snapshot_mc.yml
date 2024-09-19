@@ -1,5 +1,5 @@
 # (c) https://github.com/MontiCore/monticore
-# This workflow publishes the jar of a (GitHub) publication
+# This workflow publishes the jar of a (GitHub) publication, and then triggers downstream projects
 name: Gradle Deploy Snapshot
 
 concurrency: # run this deploy workflow only once per repository
@@ -9,7 +9,7 @@ concurrency: # run this deploy workflow only once per repository
 on:
   workflow_run: # Note: This event will only trigger a workflow run if the workflow file is on the default branch
     workflows: [ Gradle Test & Build ]
-    branches: [ dev, github-actions ]
+    branches: [ dev ]
     types:
       - completed
 
@@ -39,8 +39,7 @@ jobs:
           MAVEN_USER: ${{ secrets.SE_NEXUS_USER }}
           MAVEN_PASSWORD: ${{ secrets.SE_NEXUS_PASSWORD }}
 
-  # Trigger GitHub downstream projects
-
+  # Trigger GitHub downstream projects (without reporting the pipeline result)
   trigger-github-downstream:
     needs: [ deploy-snapshot ]
     runs-on: ubuntu-latest

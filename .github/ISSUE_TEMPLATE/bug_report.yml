@@ -18,7 +18,7 @@ body:
     validations:
       required: true
   - type: textarea
-    id: reproduce
+    id: steps_reproduce
     attributes:
       label: Steps to reproduce
       description: Tell us how we can reproduce the issue
@@ -37,7 +37,7 @@ body:
     validations:
       required: true
   - type: textarea
-    id: reproduce
+    id: project_reproduce
     attributes:
       label: Minimal reproducible example
       description: If applicable, provide a minimal grammar/model/code or link to a GitHub project to reproduce your problem.

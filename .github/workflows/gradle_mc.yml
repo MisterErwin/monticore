@@ -153,12 +153,10 @@ jobs:
           MAVEN_USER: ${{ secrets.SE_NEXUS_USER }}
           MAVEN_PASSWORD: ${{ secrets.SE_NEXUS_PASSWORD }}
 
-        # TODO: Proper message in PRs?
+        # TODO: Proper message in PRs (turn the MontiVerse into a GitHub Action?)?
 
 # TODO: FIX to specific version instead of @v3
 
 # TODO: check-links
 
 # TODO: checkMLCs
-
-# Note: After this workflow is run, the trigger_montiverse workflow triggers the MontiVerse
