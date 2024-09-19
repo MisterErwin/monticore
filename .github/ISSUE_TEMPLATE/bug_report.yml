@@ -5,9 +5,9 @@ body:
   - type: checkboxes
     id: version
     attributes:
-      label: Are you able replicate the bug in the [latest version](https://github.com/MontiCore/monticore/releases) of MontiCore.
+      label: Are you able replicate the bug in the latest version of MontiCore.
       options:
-        - label: I am able to replicate the bug in the latest version of MontiCore
+        - label: I am able to replicate the bug in the [latest version](https://github.com/MontiCore/monticore/releases) of MontiCore
           required: true
   - type: textarea
     id: bugdesc
@@ -23,9 +23,9 @@ body:
       label: Steps to reproduce
       description: Tell us how we can reproduce the issue
       placeholder: |
-        1. Go to ...
-        2. Use the ...
-        3. See error
+        1. Go to ...  
+        2. Use the ...  
+        3. See error  
     validations:
       required: true
   - type: input
